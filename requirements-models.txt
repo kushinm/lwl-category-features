@@ -1,0 +1,7 @@
+-r notebooks/requirements.txt
+scipy==1.15.3
+torch==2.6.0
+torchvision==0.21.0
+transformers==4.57.6
+huggingface-hub==0.36.2
+safetensors==0.5.3

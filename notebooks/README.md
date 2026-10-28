@@ -1,5 +1,12 @@
 # Python gaze heatmaps
 
+For the computational hypotheses, open `model_hypotheses.ipynb` using the
+same **davinci** kernel. It compares low-level saliency, ICNet complexity,
+and SigLIP2 recognition/competitor-category ablation maps inline. Setup and
+run commands are in [../MODELS.md](../MODELS.md); the research context is
+in [../RESEARCH_PLAN.md](../RESEARCH_PLAN.md). It loads the saved model run
+by default and has an explicit option to recompute it.
+
 Open `gaze_heatmaps.ipynb` and run all cells. In the IDE notebook kernel
 picker, choose **Python Environments → davinci**, using this interpreter:
 

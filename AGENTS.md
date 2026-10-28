@@ -14,6 +14,8 @@ using samples collected when that image was the target.
 
 The items are apple, banana, carrots, peas, bathtub, comb, potty, and
 toothbrush. `gaze_location_lwl.R` is the existing analysis entry point.
+Read `RESEARCH_PLAN.md` for the current hypotheses, agreed model choices,
+and interpretation limits before extending the computational analyses.
 
 ## Data and Git
 

@@ -1,0 +1,8 @@
+# Versions verified in the existing davinci Conda environment (Python 3.10.16).
+numpy==2.0.1
+pandas==2.2.3
+matplotlib==3.10.0
+Pillow==11.1.0
+ipykernel==6.29.5
+nbformat==5.10.4
+nbclient==0.10.2

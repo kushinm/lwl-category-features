@@ -1,0 +1,18 @@
+# Keep participant data and derived CSV exports local, at any depth.
+*.[cC][sS][vV]
+*.[cC][sS][vV].gz
+*.[cC][sS][vV].zip
+
+# Local analysis outputs and R session state.
+/gaze_location_plots/
+/outputs/
+/.R-library/
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+
+# Local Python and notebook state.
+.ipynb_checkpoints/
+__pycache__/
+.venv/

@@ -52,6 +52,11 @@ Use `notebooks/model_hypotheses.ipynb` to inspect its local results inline.
 The `baseline_v1` run uses 100px blur patches, 50px stride, and a 20px blur
 radius: 81 ablations per image, using cached SigLIP2 base weights. ICNet's
 official pretrained weights and source are kept in the ignored local cache.
+The completed `granular_v1` run uses 64px Gaussian-tapered blur masks
+on a 24px stride (400 ablations per image). It preserves the same prompts,
+competitor labels, blur baseline, and image/AOI geometry. Mask-weighted
+overlap gives smoother spatial maps, but it cannot identify independent
+pixel effects or show detail below the model's effective resolution.
 
 The completed first run ranked the intended label first for all eight
 intact images. Related and Unrelated contrast maps differ for every target.

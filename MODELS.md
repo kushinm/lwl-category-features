@@ -24,8 +24,10 @@ The pipeline selects CUDA when available; this machine's first run uses
 CPU, four threads, and batches of eight images. Use `--device`, `--threads`,
 and `--batch-size` to change these settings.
 
-Default output: `outputs/model_predictions/baseline_v1/`. Existing runs
-are protected: choose another `--output` for a new configuration, or use
+Default output: `outputs/model_predictions/granular_v1/`. The earlier
+100px hard-patch run remains in `outputs/model_predictions/baseline_v1/`. Existing runs
+are protected: choose another `--output` for a new configuration, use
+`--resume` for an interrupted run with identical settings, or use
 `--overwrite` explicitly. The local gaze CSV is optional; when present,
 only its design columns are read to check all 16 target/condition pairs.
 
@@ -90,20 +92,29 @@ inputs to this version of the contrast model.
 
 ## Ablations and outputs
 
-The default uses 100×100px patches on a 50px stride: 81 ablations per 500px
-image. Each patch is replaced by the corresponding region of a globally
-Gaussian-blurred copy (20px radius). Pixels outside the selected patch
-remain unchanged. SigLIP's processor then resizes the ablated image to
-224×224. Thus these are coarse region importance estimates, not independent
-pixel effects; the small original image features may be below model resolution.
+The default uses 64×64px patches on a 24px stride: 400 ablations per 500px
+image. Within each box, a Gaussian alpha mask blends the image with the
+corresponding region of a globally blurred copy (20px radius). The mask
+peaks at the box center and tapers toward the edges (Gaussian sigma = 0.45
+of the half-width). Pixels outside the box
+remain unchanged. SigLIP's processor then resizes each image to 224×224.
+The earlier `baseline_v1` used hard 100px patches, a 50px stride, and 81
+ablations per image. Its outputs are kept for comparison.
 
 For each patch, recognition is the intact-minus-ablated target logit.
 Contrast is the intact-minus-ablated target/competitor margin, equivalently
-target logit drop minus competitor logit drop. Scores are spread uniformly
-over the affected patch and averaged where patches overlap. Full edge
-coverage is required. Positive values support the target score/margin;
-negative values mean masking increased it. Signed maps and separate
-positive-only maps are saved. Neither is a calibrated fixation distribution.
+target logit drop minus competitor logit drop. Full edge coverage is
+required. Positive values support the target score/margin; negative values
+mean masking increased it. Scores are weighted by the same Gaussian alpha
+mask when placed on the image and divided by the summed
+weights at each pixel. This removes square edges from the hard-mask
+display without adding post hoc image smoothing. The effective detail is
+still limited by the mask size, model input resolution, and blur baseline;
+the 500×500 array does not represent independently measured pixel effects.
+The outer image corners have less mask coverage than the interior; inspect
+the saved `coverage` array before interpreting those pixels.
+Signed maps and separate positive-only maps are saved. Neither is a
+calibrated fixation distribution.
 
 Each run saves:
 
@@ -111,7 +122,7 @@ Each run saves:
   hashes, model paths, pairings, intact naming checks, and runtime.
 - `arrays/<target>.npz`: raw saliency channels, ICNet maps/score, signed and
   positive ablation maps, both competitor maps, their difference, every
-  ablated logit vector, patch boxes, and overlap coverage.
+  ablated logit vector, patch boxes, and summed mask weights (`coverage`).
 - `figures/`: model overviews and one five-model comparison per target.
 
 All arrays use image-native rows increasing downward. Plotting uses
@@ -130,7 +141,7 @@ model results should be displayed in notebooks.
 Change one setting at a time and use another output directory:
 
 ```bash
-python -m lwl_models.pipeline --patch-size 150 --stride 75 --output outputs/model_predictions/patch150
+python -m lwl_models.pipeline --patch-size 100 --stride 50 --mask-shape hard --output outputs/model_predictions/hard_patch100
 python -m lwl_models.pipeline --mode mean --output outputs/model_predictions/mean_baseline
 python -m unittest discover -s tests -v
 ```

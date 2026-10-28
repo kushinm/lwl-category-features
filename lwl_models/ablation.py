@@ -3,8 +3,10 @@
 import numpy as np
 from PIL import Image, ImageFilter
 
+GAUSSIAN_SIGMA_FRACTION = 0.45
 
-def patch_boxes(size, patch_size=100, stride=50):
+
+def patch_boxes(size, patch_size=64, stride=24):
     """Return (left, top, right, bottom) rectangles with complete coverage."""
     width, height = size
     if not (0 < stride <= patch_size <= min(width, height)):
@@ -17,8 +19,28 @@ def patch_boxes(size, patch_size=100, stride=50):
                        for y in starts(height) for x in starts(width)], dtype=np.int64)
 
 
-def ablated_images(image, boxes, mode="blur", blur_radius=20.0):
-    """Replace each patch with a fixed blurred or mean-color baseline."""
+def patch_mask(box, mask_shape="gaussian"):
+    """Return the ablation strength inside one box, including its edge pixels."""
+    left, top, right, bottom = map(int, box)
+    width, height = right - left, bottom - top
+    if width <= 0 or height <= 0:
+        raise ValueError("Patch boxes must have positive area.")
+    if mask_shape == "hard":
+        return np.ones((height, width), dtype=np.float32)
+    if mask_shape != "gaussian":
+        raise ValueError("Mask shape must be 'hard' or 'gaussian'.")
+    # Sigma is 0.45 of the half-width. Quantize to the same 8-bit alpha used
+    # by PIL so map aggregation uses the mask that the model actually sees.
+    x = (np.arange(width) + 0.5 - width / 2) / (width / 2)
+    y = (np.arange(height) + 0.5 - height / 2) / (height / 2)
+    mask = np.exp(-0.5 * ((x[None, :] / GAUSSIAN_SIGMA_FRACTION) ** 2 +
+                          (y[:, None] / GAUSSIAN_SIGMA_FRACTION) ** 2))
+    mask /= mask.max()
+    return np.rint(mask * 255).astype(np.uint8).astype(np.float32) / 255
+
+
+def ablated_images(image, boxes, mode="blur", blur_radius=20.0, mask_shape="gaussian"):
+    """Replace each region with a fixed baseline, optionally with soft edges."""
     if mode == "blur":
         if blur_radius <= 0:
             raise ValueError("Blur radius must be positive.")
@@ -31,12 +53,17 @@ def ablated_images(image, boxes, mode="blur", blur_radius=20.0):
     for box in boxes:
         result = image.copy()
         region = tuple(map(int, box))
-        result.paste(replacement.crop(region), region)
+        if mask_shape == "hard":
+            result.paste(replacement.crop(region), region)
+        else:
+            mask = Image.fromarray(np.rint(patch_mask(box, mask_shape) * 255).astype(np.uint8))
+            blended = Image.composite(replacement.crop(region), image.crop(region), mask)
+            result.paste(blended, region)
         yield result
 
 
-def aggregate_patch_effects(boxes, effects, size):
-    """Spread each patch effect over that patch, averaging overlaps.
+def aggregate_patch_effects(boxes, effects, size, mask_shape="gaussian"):
+    """Spread each patch effect according to its mask, averaging overlaps.
 
     This is regional attribution at patch resolution, not per-pixel causal
     identification. No extra smoothing or within-map rescaling is applied.
@@ -46,10 +73,11 @@ def aggregate_patch_effects(boxes, effects, size):
     if effects.shape != (len(boxes),) or not np.isfinite(effects).all():
         raise ValueError("Expected one finite score change for every patch.")
     total = np.zeros((height, width), dtype=float)
-    coverage = np.zeros((height, width), dtype=np.int32)
+    coverage = np.zeros((height, width), dtype=float)
     for (left, top, right, bottom), effect in zip(boxes, effects):
-        total[top:bottom, left:right] += effect
-        coverage[top:bottom, left:right] += 1
+        mask = patch_mask((left, top, right, bottom), mask_shape)
+        total[top:bottom, left:right] += effect * mask
+        coverage[top:bottom, left:right] += mask
     if not np.all(coverage > 0):
         raise ValueError("Patch grid leaves unmeasured image pixels.")
     return total / coverage, coverage

@@ -3,14 +3,15 @@
 import unittest
 import numpy as np
 from PIL import Image
-from lwl_models.ablation import patch_boxes, ablated_images, aggregate_patch_effects, score_effects
+from lwl_models.ablation import patch_boxes, patch_mask, ablated_images, aggregate_patch_effects, score_effects
 from lwl_models.low_level import low_level_saliency
 
 
 class AblationTests(unittest.TestCase):
     def test_edge_coverage_and_overlap_normalization(self):
         boxes = patch_boxes((8, 7), patch_size=3, stride=2)
-        array, coverage = aggregate_patch_effects(boxes, np.full(len(boxes), 2.0), (8, 7))
+        array, coverage = aggregate_patch_effects(boxes, np.full(len(boxes), 2.0),
+                                                   (8, 7), mask_shape="hard")
         np.testing.assert_array_equal(array, np.full((7, 8), 2.0))
         self.assertTrue(np.all(coverage > 0))
         self.assertGreater(coverage.max(), coverage.min())
@@ -36,12 +37,33 @@ class AblationTests(unittest.TestCase):
         checker = ((np.indices((12, 12)).sum(axis=0) % 2) * 255).astype(np.uint8)
         original = np.repeat(checker[..., None], 3, axis=2)
         image = Image.fromarray(original)
-        changed = np.asarray(next(ablated_images(image, [(3, 4, 8, 9)], blur_radius=2)))
+        changed = np.asarray(next(ablated_images(image, [(3, 4, 8, 9)],
+                                                 blur_radius=2, mask_shape="hard")))
         outside = np.ones((12, 12), dtype=bool)
         outside[4:9, 3:8] = False
         np.testing.assert_array_equal(changed[outside], original[outside])
         self.assertTrue(np.any(changed[~outside] != original[~outside]))
         np.testing.assert_array_equal(np.asarray(image), original)
+
+    def test_gaussian_masks_and_weighted_attribution(self):
+        boxes = patch_boxes((12, 12), patch_size=6, stride=3)
+        mask = patch_mask(boxes[0], "gaussian")
+        self.assertGreater(mask[3, 3], mask[0, 0])
+        self.assertGreater(mask.min(), 0)
+        constant, coverage = aggregate_patch_effects(
+            boxes, np.full(len(boxes), 2.0), (12, 12), mask_shape="gaussian")
+        np.testing.assert_allclose(constant, 2.0)
+        self.assertTrue(np.all(coverage > 0))
+        # Mean replacement of a constant image is identical, so use a black
+        # center pixel to make the fixed mean-color baseline observable.
+        pixels = np.full((12, 12, 3), 255, dtype=np.uint8)
+        pixels[3, 3] = 0
+        image = Image.fromarray(pixels)
+        changed = np.asarray(next(ablated_images(
+            image, boxes[:1], mode="mean", mask_shape="gaussian")))
+        np.testing.assert_array_equal(changed[6:, 6:], pixels[6:, 6:])
+        self.assertGreater(np.abs(changed[3, 3].astype(int) - pixels[3, 3]).sum(),
+                           np.abs(changed[0, 0].astype(int) - pixels[0, 0]).sum())
 
 
 class LowLevelTests(unittest.TestCase):
